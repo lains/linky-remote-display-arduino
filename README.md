@@ -10,3 +10,7 @@ The software is currently configured to decode Linky data in standard TIC mode (
 As an alternative, the code can be slightly tweaked to switch to historical mode and to work at 1200 bauds (this is the default mode for Linky meters).
 
 I use the LCD to display the withdrawn power in real-time.
+
+In order to compile, you will have to import two external libraries that this code depends on:
+* AdaFruit RGB LCD shield library that can be installed directly from the built-in Arduino IDE's library manager
+* LibTeleinfo from [Charles Hallard](https://github.com/hallard/LibTeleinfo) (use Arduino IDE's import library as zip)
