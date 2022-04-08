@@ -54,9 +54,10 @@ constexpr uint16_t TIC_PROBE_FAIL_TIMEOUT_MS=10000; /*!< How long (in ms) should
  * Global context
  */
 typedef struct {
-  uint32_t      startupTime;          /*!< Initial startup time (in ms) */
+  uint32_t      startupTime;          /*!< Initial startup time (in ms), corresponding to the time when setup() is invoked after boot */
   uint32_t      lastValidSinsts;      /*!< Last known value for SINSTS */
   uint32_t      displayedPower;       /*!< Currently displayed power value */
+  uint32_t      lateTicDecodeCount;   /*!< How many late TIC decode events occurred since startup */
   uint32_t      ticUpdates;           /*!< The total number of TIC updates received from the meter */
   uint8_t       stage;                /*!< The current stage in the startup state machine */
   uint8_t       nbDotsProgress;       /*!< The number of dots on the progress bar */
@@ -78,6 +79,7 @@ void setup() {
   Serial.begin(9600); /* Ephemeral serial init for program updload */
   ctx.startupTime = millis();
   ctx.nbDotsProgress = 0;
+  ctx.lateTicDecodeCount = 0;
   ctx.ticUpdates = 0;
   ctx.lastValidSinsts = -1;
   ctx.displayedPower = -1;
@@ -262,6 +264,7 @@ void loop() {
     if (waitingRxBytes > 0) {
       if (ctx.lastTicDecodeState == TINFO_READY && ctx.stage == STAGE_TIC_IN_SYNC && waitingRxBytes > (SERIAL_RX_BUFFER_SIZE*3/4)) { /* Less that 1/4 of incoming buffer is available, we are running late */
         ctx.stage = STAGE_TIC_IN_SYNC_RUNNING_LATE;
+        ctx.lateTicDecodeCount++;
       }
       _State_e newTicDecodeState = tinfo.process(Serial.read());
       wdt_reset();
