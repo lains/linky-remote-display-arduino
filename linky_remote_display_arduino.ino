@@ -55,7 +55,7 @@ typedef struct {
   uint32_t   displayedPower;         /*!< Currently displayed power value */
   uint8_t    stage;                  /*!< The current stage in the startup state machine */
   uint8_t    nbDotsProgress;         /*!< The number of dots on the progress bar */
-  _State_e   lastTicDecodestate;     /*!< The last known TIC decoding state */
+  _State_e   lastTicDecodeState;     /*!< The last known TIC decoding state */
   bool       beat;                   /*!< Heartbeat (toggled between true and false for each received TIC frame) */
 } g_ctx_t;
 
@@ -75,7 +75,7 @@ void setup() {
   ctx.nbDotsProgress = 0;
   ctx.lastValidSinsts = -1;
   ctx.displayedPower = -1;
-  ctx.lastTicDecodestate = (_State_e)(-1);
+  ctx.lastTicDecodeState = (_State_e)(-1);
   ctx.beat = false;
   pinMode(LED_BUILTIN, OUTPUT);
   lcd.begin(LCD_WIDTH, LCD_HEIGHT); /* Initialize the LCD display: 16x2 */
@@ -203,6 +203,27 @@ void ticNewDataCallback(ValueList* me, uint8_t flags) {
   wdt_reset();
 }
 
+void updateDisplay(uint8_t newTicDecodeState) {
+  if (newTicDecodeState == TINFO_READY) {
+    if (ctx.stage < STAGE_TIC_IN_SYNC) {
+      lcd.clear();  /* Switching to sync then to power display mode */
+      ctx.stage = STAGE_TIC_IN_SYNC;
+    }
+    else if (ctx.stage == STAGE_TIC_IN_SYNC) {  /* Display only if STAGE_TIC_IN_SYNC, not even when STAGE_TIC_IN_SYNC_RUNNING_LATE, as we don't have enought time to  */
+      if (ctx.lastValidSinsts != -1) {
+        if (ctx.displayedPower != ctx.lastValidSinsts) {
+          lcd.setCursor(0, 0);
+          lcd.print(ctx.lastValidSinsts);
+          lcd.print('W');
+          lcd.print("   ");
+          wdt_reset();
+        }
+        ctx.displayedPower = ctx.lastValidSinsts;
+      }
+    }
+  }
+}
+
 /**
  * @brief Main loop
  */
@@ -235,36 +256,19 @@ void loop() {
     wdt_reset();
     int waitingRxBytes = Serial.available();  /* Is there incoming data pending, and how much (in bytes) */
     if (waitingRxBytes > 0) {
-      if (ctx.lastTicDecodestate == TINFO_READY && ctx.stage == STAGE_TIC_IN_SYNC && waitingRxBytes > (SERIAL_RX_BUFFER_SIZE*3/4)) { /* Less that 1/4 of incoming buffer is available, we are running late */
+      if (ctx.lastTicDecodeState == TINFO_READY && ctx.stage == STAGE_TIC_IN_SYNC && waitingRxBytes > (SERIAL_RX_BUFFER_SIZE*3/4)) { /* Less that 1/4 of incoming buffer is available, we are running late */
         ctx.stage = STAGE_TIC_IN_SYNC_RUNNING_LATE;
       }
       _State_e newTicDecodeState = tinfo.process(Serial.read());
       wdt_reset();
-      if (newTicDecodeState == TINFO_READY) {
-        if (ctx.stage < STAGE_TIC_IN_SYNC) {
-          lcd.clear();  /* Switching to sync then to power display mode */
-          ctx.stage = STAGE_TIC_IN_SYNC;
-        }
-        else if (ctx.stage == STAGE_TIC_IN_SYNC) {  /* Display only if STAGE_TIC_IN_SYNC, not even when STAGE_TIC_IN_SYNC_RUNNING_LATE, as we don't have enought time to  */
-          if (ctx.lastValidSinsts != -1) {
-            if (ctx.displayedPower != ctx.lastValidSinsts) {
-              lcd.setCursor(0, 0);
-              lcd.print(ctx.lastValidSinsts);
-              lcd.print('W');
-              lcd.print(' ');
-              wdt_reset();
-            }
-            ctx.displayedPower = ctx.lastValidSinsts;
-          }
-        }
-      }
-      ctx.lastTicDecodestate = newTicDecodeState;
+      updateDisplay(newTicDecodeState);
+      ctx.lastTicDecodeState = newTicDecodeState;
     }
     else {  /* No waiting RX byte... we processed every TIC byte, we are running early */
       if (ctx.stage == STAGE_TIC_IN_SYNC_RUNNING_LATE)
         ctx.stage=STAGE_TIC_IN_SYNC;
     }
-    if (ctx.stage == STAGE_TIC_PROBE && ctx.lastTicDecodestate != TINFO_READY) {
+    if (ctx.stage == STAGE_TIC_PROBE && ctx.lastTicDecodeState != TINFO_READY) {
       if (millis() - ctx.startupTime > TIC_PROBE_FAIL_TIMEOUT_MS) {
         ctx.stage = STAGE_TIC_SYNC_FAIL;
         lcd.clear();
