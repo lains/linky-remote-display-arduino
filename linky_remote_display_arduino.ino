@@ -27,15 +27,19 @@ Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 #define ELEC_ICON_IDX 0
 #define FULL_SQUARE_IDX 1
 /* Icon created with https://www.quinapalus.com/hd44780udg.html (character size: 5x8) */
-byte icons[2][8] = { { 0x8, 0x4, 0x2, 0x4, 0x8, 0x5, 0x3, 0x7 },
-                     { 0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f}
-                   };
+uint8_t icons[2][8] = { { 0x8, 0x4, 0x2, 0x4, 0x8, 0x5, 0x3, 0x7 },
+                        { 0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f}
+                      };
 
 constexpr uint16_t NO_SERIAL_INIT_TIMEOUT_MS=5000; /*!< How long (in ms) should we delay (since boot time) the serial setup when a user action is performed at boot time? (max value=655350/LCD_WIDTH, thus 40s) */
 constexpr uint16_t TIC_PROBE_FAIL_TIMEOUT_MS=10000; /*!< How long (in ms) should we wait (since boot time)for TIC synchronization before issuing a warning messages */
 #define LCD_WIDTH 16
 #define LCD_HEIGHT 2
 
+#define uint32ToNbDigits(i) (i<10?1:(i<100?2:(i<1000?3:(i<10000?4:5))))
+/**
+ * Boot progress and TIC decoding state machine
+ */
 #define STAGE_WAIT_RELEASE_INIT 0
 #define STAGE_WAIT_RELEASE_CHAR_CREATED 1
 #define STAGE_WAIT_RELEASE_DISPLAY_DONE 2
@@ -50,13 +54,14 @@ constexpr uint16_t TIC_PROBE_FAIL_TIMEOUT_MS=10000; /*!< How long (in ms) should
  * Global context
  */
 typedef struct {
-  uint32_t   startupTime;            /*!< Initial startup time (in ms) */
-  uint32_t   lastValidSinsts;        /*!< Last known value for SINSTS */
-  uint32_t   displayedPower;         /*!< Currently displayed power value */
-  uint8_t    stage;                  /*!< The current stage in the startup state machine */
-  uint8_t    nbDotsProgress;         /*!< The number of dots on the progress bar */
-  _State_e   lastTicDecodeState;     /*!< The last known TIC decoding state */
-  bool       beat;                   /*!< Heartbeat (toggled between true and false for each received TIC frame) */
+  uint32_t      startupTime;          /*!< Initial startup time (in ms) */
+  uint32_t      lastValidSinsts;      /*!< Last known value for SINSTS */
+  uint32_t      displayedPower;       /*!< Currently displayed power value */
+  uint32_t      ticUpdates;           /*!< The total number of TIC updates received from the meter */
+  uint8_t       stage;                /*!< The current stage in the startup state machine */
+  uint8_t       nbDotsProgress;       /*!< The number of dots on the progress bar */
+  _State_e      lastTicDecodeState;   /*!< The last known TIC decoding state */
+  bool          beat;                 /*!< Heartbeat (toggled between true and false for each received TIC frame) */
 } g_ctx_t;
 
 g_ctx_t ctx ; /*!< Global context storage */
@@ -73,6 +78,7 @@ void setup() {
   Serial.begin(9600); /* Ephemeral serial init for program updload */
   ctx.startupTime = millis();
   ctx.nbDotsProgress = 0;
+  ctx.ticUpdates = 0;
   ctx.lastValidSinsts = -1;
   ctx.displayedPower = -1;
   ctx.lastTicDecodeState = (_State_e)(-1);
@@ -151,12 +157,10 @@ void bootModeCheckAndProgressDisplay() {
  * @param flags Current flags value
  */
 void ticNewDataCallback(ValueList* me, uint8_t flags) {
-  static unsigned int calls = 0;
   uint32_t sinsts = (uint32_t)(-1);
   uint8_t charsDrawnAtLine1;
 
-  calls++;
-
+  ctx.ticUpdates++;
   if (ctx.stage != STAGE_TIC_IN_SYNC)
     return;
 
@@ -266,7 +270,7 @@ void loop() {
     }
     else {  /* No waiting RX byte... we processed every TIC byte, we are running early */
       if (ctx.stage == STAGE_TIC_IN_SYNC_RUNNING_LATE)
-        ctx.stage=STAGE_TIC_IN_SYNC;
+        ctx.stage = STAGE_TIC_IN_SYNC;
     }
     if (ctx.stage == STAGE_TIC_PROBE && ctx.lastTicDecodeState != TINFO_READY) {
       if (millis() - ctx.startupTime > TIC_PROBE_FAIL_TIMEOUT_MS) {
