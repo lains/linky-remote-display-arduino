@@ -51,19 +51,39 @@ constexpr uint16_t TIC_PROBE_FAIL_TIMEOUT_MS=10000; /*!< How long (in ms) should
 #define STAGE_TIC_IN_SYNC_RUNNING_LATE 31 /*!< Synchronized to TIC stream, currently receiving TIC data but we are running late in decoding incoming bytes */
 
 /**
- * Global context
+ * @brief Context for boot data
  */
 typedef struct {
   uint32_t      startupTime;          /*!< Initial startup time (in ms), corresponding to the time when setup() is invoked after boot */
+  uint8_t       nbDotsProgress;       /*!< The number of dots on the progress bar while entering to programming mode */
+} ctx_boot_t;
+
+/**
+ * @brief Context for TIC data & measurements
+ */
+typedef struct {
   uint32_t      lastValidSinsts;      /*!< Last known value for SINSTS */
-  uint32_t      displayedPower;       /*!< Currently displayed power value */
   uint32_t      lateTicDecodeCount;   /*!< How many late TIC decode events occurred since startup */
   uint32_t      ticUpdates;           /*!< The total number of TIC updates received from the meter */
-  uint8_t       stage;                /*!< The current stage in the startup state machine */
-  uint8_t       nbDotsProgress;       /*!< The number of dots on the progress bar */
-  uint8_t       charsOnLine0;         /*!< Number of characters displayed at the left of the first line on the display (used to efficiently clear data) */
   _State_e      lastTicDecodeState;   /*!< The last known TIC decoding state */
   bool          beat;                 /*!< Heartbeat (toggled between true and false for each received TIC frame) */
+} ctx_tic_t;
+
+/**
+ * @brief Context for LCD display data
+ */
+typedef struct {
+} ctx_lcd_t;
+
+/**
+ * @brief Global context
+ */
+typedef struct {
+  ctx_tic_t     tic;                  /*!< TIC & measurements-related context values */
+  ctx_boot_t    boot;                 /*!< Boot-related context values */
+  uint32_t      displayedPower;       /*!< Currently displayed power value */
+  uint8_t       stage;                /*!< The current stage in the startup state machine */
+  uint8_t       charsOnLine0;         /*!< Number of characters displayed at the left of the first line on the display (used to efficiently clear data) */
 } g_ctx_t;
 
 g_ctx_t ctx ; /*!< Global context storage */
@@ -78,15 +98,15 @@ void(*swReset) (void) = 0;  /*!< declare reset fuction at address 0 */
  */
 void setup() {
   Serial.begin(9600); /* Ephemeral serial init for program updload */
-  ctx.startupTime = millis();
-  ctx.nbDotsProgress = 0;
-  ctx.lateTicDecodeCount = 0;
-  ctx.ticUpdates = 0;
-  ctx.lastValidSinsts = -1;
+  ctx.boot.startupTime = millis();
+  ctx.boot.nbDotsProgress = 0;
+  ctx.tic.lateTicDecodeCount = 0;
+  ctx.tic.ticUpdates = 0;
+  ctx.tic.lastValidSinsts = -1;
   ctx.displayedPower = -1;
-  ctx.lastTicDecodeState = (_State_e)(-1);
+  ctx.tic.lastTicDecodeState = (_State_e)(-1);
   ctx.charsOnLine0 = LCD_WIDTH; /* LCD display assumed to be full of characters to clear */
-  ctx.beat = false;
+  ctx.tic.beat = false;
   pinMode(LED_BUILTIN, OUTPUT);
   lcd.begin(LCD_WIDTH, LCD_HEIGHT); /* Initialize the LCD display: 16x2 */
   lcd.setBacklight(WHITE);
@@ -133,17 +153,17 @@ void infiniteLoopWaitUpdate() {
  * @note This requires continuous user interaction (override) to continue progression towards upload mode, and should be called repeatedly in a loop
  * @warning If upload mode is reached, this function will never return. If progressing to upload mode, this function will update the display and return
  */
-void bootModeCheckAndProgressDisplay() {
+void bootModeCheckAndProgressDisplay(ctx_boot_t &boot_ctx) {
   int timeNow = millis();
-  if (timeNow > ctx.startupTime) {
-    uint16_t timeDelta = timeNow - ctx.startupTime;
+  if (timeNow > boot_ctx.startupTime) {
+    uint16_t timeDelta = timeNow - boot_ctx.startupTime;
     if (timeDelta < NO_SERIAL_INIT_TIMEOUT_MS) {
       /* Note we divide both timeDelta and NO_SERIAL_INIT_TIMEOUT_MS by 10 here to avoid 16-bit overflow when multiplying by timeDelta (uint16_t) by LCD_WIDTH */
       uint8_t currentNbDotsProgress = ((uint16_t)timeDelta/10 * LCD_WIDTH) / (NO_SERIAL_INIT_TIMEOUT_MS/10);
-      if (ctx.nbDotsProgress < currentNbDotsProgress) {
+      if (boot_ctx.nbDotsProgress < currentNbDotsProgress) {
         lcd.setCursor(currentNbDotsProgress-1, 1);
         lcd.write(FULL_SQUARE_IDX);
-        ctx.nbDotsProgress = currentNbDotsProgress;
+        boot_ctx.nbDotsProgress = currentNbDotsProgress;
       }
     }
     else {  /* Delayed serial action has been maintained from the very start of boot and during the whole NO_SERIAL_INIT_TIMEOUT_MS period, assume we will stay in the bootloader without decoding TIC */
@@ -156,19 +176,16 @@ void bootModeCheckAndProgressDisplay() {
 }
 
 /**
- * @brief Callback function invoked when new of modified data is received
+ * @brief Process new TIC data received from the meter
  * @param me linked list pointer on the concerned data
+ * @param tic The context for TIC data & measurements
  * @param flags Current flags value
  */
-void ticNewDataCallback(ValueList* me, uint8_t flags) {
+void processTicIncomingData(ValueList* me, ctx_tic_t& tic, uint8_t flags) {
   uint32_t sinsts = (uint32_t)(-1);
   uint8_t charsDrawnAtLine1;
 
-  ctx.ticUpdates++;
-  if (ctx.stage != STAGE_TIC_IN_SYNC)
-    return;
-
-  /* Collect data */
+  /* Parse through incoming data */
   ValueList* datap= me;
   int count = 0;
   while (datap != nullptr) {
@@ -189,9 +206,9 @@ void ticNewDataCallback(ValueList* me, uint8_t flags) {
   }
   */
   if (sinsts != (uint32_t)(-1)) { /* We got a proper value for sinsts */
-    ctx.lastValidSinsts = sinsts;
+    tic.lastValidSinsts = sinsts;
     //lcd.setCursor(15, 0); /* Last character on first line */
-    if (ctx.beat) {
+    if (tic.beat) {
       //lcd.write(ELEC_ICON_IDX);
       digitalWrite(LED_BUILTIN, HIGH);
     }
@@ -199,7 +216,7 @@ void ticNewDataCallback(ValueList* me, uint8_t flags) {
       //lcd.print(' ');
       digitalWrite(LED_BUILTIN, LOW);
     }
-    ctx.beat = !ctx.beat;
+    tic.beat = !tic.beat;
   }
   /*
   lcd.setCursor(0, 1);
@@ -208,6 +225,20 @@ void ticNewDataCallback(ValueList* me, uint8_t flags) {
   lcd.print(count);
   lcd.print(' ');
   */
+}
+
+/**
+ * @brief Callback function invoked when new of modified data is received
+ * @param me linked list pointer on the concerned data
+ * @param flags Current flags value
+ */
+void ticNewDataCallback(ValueList* me, uint8_t flags) {
+  ctx.tic.ticUpdates++;
+  if (ctx.stage != STAGE_TIC_IN_SYNC)
+    return;
+
+  wdt_reset();
+  processTicIncomingData(me, ctx.tic, flags);
   wdt_reset();
 }
 
@@ -223,13 +254,13 @@ void updateDisplay(uint8_t currentTicDecodeState, g_ctx_t& ctx) {
       ctx.stage = STAGE_TIC_IN_SYNC;
     }
     else if (ctx.stage == STAGE_TIC_IN_SYNC) {  /* Display only if STAGE_TIC_IN_SYNC, not even when STAGE_TIC_IN_SYNC_RUNNING_LATE, as we don't have enought time to  */
-      if (ctx.lastValidSinsts != -1) {
-        if (ctx.displayedPower != ctx.lastValidSinsts) {
-          uint8_t displayedChars = uint32ToNbDigits(ctx.lastValidSinsts) + 1; /* +1 for the W symbol */
+      if (ctx.tic.lastValidSinsts != -1) {
+        if (ctx.displayedPower != ctx.tic.lastValidSinsts) {
+          uint8_t displayedChars = uint32ToNbDigits(ctx.tic.lastValidSinsts) + 1; /* +1 for the W symbol */
           if (displayedChars > LCD_WIDTH) /* Foolproof */
             displayedChars = LCD_WIDTH;
           lcd.setCursor(0, 0);
-          lcd.print(ctx.lastValidSinsts);
+          lcd.print(ctx.tic.lastValidSinsts);
           lcd.print('W');
           if (ctx.charsOnLine0 < displayedChars) {
             ctx.charsOnLine0 = displayedChars;
@@ -242,7 +273,7 @@ void updateDisplay(uint8_t currentTicDecodeState, g_ctx_t& ctx) {
           }
           wdt_reset();
         }
-        ctx.displayedPower = ctx.lastValidSinsts;
+        ctx.displayedPower = ctx.tic.lastValidSinsts;
       }
     }
   }
@@ -258,7 +289,7 @@ void loop() {
         lcd.createChar(FULL_SQUARE_IDX, icons[FULL_SQUARE_IDX]);
         ctx.stage = STAGE_WAIT_RELEASE_CHAR_CREATED;
       }
-      bootModeCheckAndProgressDisplay();
+      bootModeCheckAndProgressDisplay(ctx.boot);
     } /* No button pressed before end of timeout, continue booting */
     ctx.stage = STAGE_SERIAL_INIT;  /* Delayed serial action has been stopped before the end of NO_SERIAL_INIT_TIMEOUT_MS period, continue serial initialization */
   }
@@ -269,7 +300,7 @@ void loop() {
     lcd.createChar(ELEC_ICON_IDX, icons[ELEC_ICON_IDX]);
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("Connecting...");
+    lcd.print("Syncing...");
     ctx.stage = STAGE_TIC_PROBE;
     tinfo.init(TINFO_MODE_STANDARD);
     tinfo.attachData(ticNewDataCallback);
@@ -279,25 +310,25 @@ void loop() {
     wdt_reset();
     int waitingRxBytes = Serial.available();  /* Is there incoming data pending, and how much (in bytes) */
     if (waitingRxBytes > 0) {
-      if (ctx.lastTicDecodeState == TINFO_READY && ctx.stage == STAGE_TIC_IN_SYNC && waitingRxBytes > (SERIAL_RX_BUFFER_SIZE*3/4)) { /* Less that 1/4 of incoming buffer is available, we are running late */
+      if (ctx.tic.lastTicDecodeState == TINFO_READY && ctx.stage == STAGE_TIC_IN_SYNC && waitingRxBytes > (SERIAL_RX_BUFFER_SIZE*3/4)) { /* Less that 1/4 of incoming buffer is available, we are running late */
         ctx.stage = STAGE_TIC_IN_SYNC_RUNNING_LATE;
-        ctx.lateTicDecodeCount++;
+        ctx.tic.lateTicDecodeCount++;
       }
       _State_e newTicDecodeState = tinfo.process(Serial.read());
       wdt_reset();
       updateDisplay(newTicDecodeState, ctx);
-      ctx.lastTicDecodeState = newTicDecodeState;
+      ctx.tic.lastTicDecodeState = newTicDecodeState;
     }
     else {  /* No waiting RX byte... we processed every TIC byte, we are running early */
       if (ctx.stage == STAGE_TIC_IN_SYNC_RUNNING_LATE)
         ctx.stage = STAGE_TIC_IN_SYNC;
     }
-    if (ctx.stage == STAGE_TIC_PROBE && ctx.lastTicDecodeState != TINFO_READY) {
-      if (millis() - ctx.startupTime > TIC_PROBE_FAIL_TIMEOUT_MS) {
+    if (ctx.stage == STAGE_TIC_PROBE && ctx.tic.lastTicDecodeState != TINFO_READY) {
+      if (millis() - ctx.boot.startupTime > TIC_PROBE_FAIL_TIMEOUT_MS) {
         ctx.stage = STAGE_TIC_SYNC_FAIL;
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.print("Connect. failed!");
+        lcd.print("No signal!");
         digitalWrite(LED_BUILTIN, HIGH);
         wdt_reset();
       }
