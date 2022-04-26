@@ -61,6 +61,7 @@ typedef struct {
   uint32_t      ticUpdates;           /*!< The total number of TIC updates received from the meter */
   uint8_t       stage;                /*!< The current stage in the startup state machine */
   uint8_t       nbDotsProgress;       /*!< The number of dots on the progress bar */
+  uint8_t       charsOnLine0;         /*!< Number of characters displayed at the left of the first line on the display (used to efficiently clear data) */
   _State_e      lastTicDecodeState;   /*!< The last known TIC decoding state */
   bool          beat;                 /*!< Heartbeat (toggled between true and false for each received TIC frame) */
 } g_ctx_t;
@@ -84,6 +85,7 @@ void setup() {
   ctx.lastValidSinsts = -1;
   ctx.displayedPower = -1;
   ctx.lastTicDecodeState = (_State_e)(-1);
+  ctx.charsOnLine0 = LCD_WIDTH; /* LCD display assumed to be full of characters to clear */
   ctx.beat = false;
   pinMode(LED_BUILTIN, OUTPUT);
   lcd.begin(LCD_WIDTH, LCD_HEIGHT); /* Initialize the LCD display: 16x2 */
@@ -209,8 +211,13 @@ void ticNewDataCallback(ValueList* me, uint8_t flags) {
   wdt_reset();
 }
 
-void updateDisplay(uint8_t newTicDecodeState) {
-  if (newTicDecodeState == TINFO_READY) {
+/**
+ * @brief Update the values displayed on the LCD screen
+ * @param currentTicDecodeState The current TIC decoding state
+ * @param ctx The current context
+ */
+void updateDisplay(uint8_t currentTicDecodeState, g_ctx_t& ctx) {
+  if (currentTicDecodeState == TINFO_READY) {
     if (ctx.stage < STAGE_TIC_IN_SYNC) {
       lcd.clear();  /* Switching to sync then to power display mode */
       ctx.stage = STAGE_TIC_IN_SYNC;
@@ -218,10 +225,21 @@ void updateDisplay(uint8_t newTicDecodeState) {
     else if (ctx.stage == STAGE_TIC_IN_SYNC) {  /* Display only if STAGE_TIC_IN_SYNC, not even when STAGE_TIC_IN_SYNC_RUNNING_LATE, as we don't have enought time to  */
       if (ctx.lastValidSinsts != -1) {
         if (ctx.displayedPower != ctx.lastValidSinsts) {
+          uint8_t displayedChars = uint32ToNbDigits(ctx.lastValidSinsts) + 1; /* +1 for the W symbol */
+          if (displayedChars > LCD_WIDTH) /* Foolproof */
+            displayedChars = LCD_WIDTH;
           lcd.setCursor(0, 0);
           lcd.print(ctx.lastValidSinsts);
           lcd.print('W');
-          lcd.print("   ");
+          if (ctx.charsOnLine0 < displayedChars) {
+            ctx.charsOnLine0 = displayedChars;
+          }
+          else {
+            while (ctx.charsOnLine0 > displayedChars) {  /* We have previous chars to clean up */
+              lcd.print(' ');
+              ctx.charsOnLine0--;
+            }
+          }
           wdt_reset();
         }
         ctx.displayedPower = ctx.lastValidSinsts;
@@ -254,7 +272,6 @@ void loop() {
     lcd.print("Connecting...");
     ctx.stage = STAGE_TIC_PROBE;
     tinfo.init(TINFO_MODE_STANDARD);
-
     tinfo.attachData(ticNewDataCallback);
 //    lcd.setCursor(0, 1);
   }
@@ -268,7 +285,7 @@ void loop() {
       }
       _State_e newTicDecodeState = tinfo.process(Serial.read());
       wdt_reset();
-      updateDisplay(newTicDecodeState);
+      updateDisplay(newTicDecodeState, ctx);
       ctx.lastTicDecodeState = newTicDecodeState;
     }
     else {  /* No waiting RX byte... we processed every TIC byte, we are running early */
