@@ -31,8 +31,8 @@ uint8_t icons[2][8] = { { 0x8, 0x4, 0x2, 0x4, 0x8, 0x5, 0x3, 0x7 },
                         { 0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f,0x1f}
                       };
 
-constexpr uint16_t NO_SERIAL_INIT_TIMEOUT_MS=5000; /*!< How long (in ms) should we delay (since boot time) the serial setup when a user action is performed at boot time? (max value=655350/LCD_WIDTH, thus 40s) */
-constexpr uint16_t TIC_PROBE_FAIL_TIMEOUT_MS=10000; /*!< How long (in ms) should we wait (since boot time)for TIC synchronization before issuing a warning messages */
+constexpr uint16_t NO_SERIAL_INIT_TIMEOUT_MS=2000; /*!< How long (in ms) should we delay (since boot time) the serial setup when a user action is performed at boot time? (max value=655350/LCD_WIDTH, thus 40s) */
+constexpr uint16_t TIC_PROBE_FAIL_TIMEOUT_MS=10000; /*!< How long (in ms) should we wait (since boot time) for TIC synchronization before issuing a warning messages */
 #define LCD_WIDTH 16
 #define LCD_HEIGHT 2
 
@@ -97,7 +97,7 @@ void(*swReset) (void) = 0;  /*!< declare reset fuction at address 0 */
  * @brief Setup the board at initial boot
  */
 void setup() {
-  Serial.begin(9600); /* Ephemeral serial init for program updload */
+  Serial.begin(9600); /* Ephemeral serial init for program upload */
   ctx.boot.startupTime = millis();
   ctx.boot.nbDotsProgress = 0;
   ctx.tic.lateTicDecodeCount = 0;
