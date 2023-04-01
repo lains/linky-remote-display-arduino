@@ -11,6 +11,17 @@ As an alternative, the code can be slightly tweaked to switch to historical mode
 
 I use the LCD to display the withdrawn power in real-time.
 
-In order to compile, you will have to import two external libraries that this code depends on:
+To compile, first clone the content of this repository and the TIC library submodule:
+```
+git clone https://github.com/lains/linky_remote_display_arduino.git
+git submodule init stm32-linky-display
+```
+
+You will also have to import two external libraries that this code depends on:
 * AdaFruit RGB LCD shield library that can be installed directly from the built-in Arduino IDE's library manager
-* LibTeleinfo from [Charles Hallard](https://github.com/hallard/LibTeleinfo) (use Arduino IDE's import library as zip)
+
+Once these prerequisites are satisfied, compile with the Arduino IDE and flash to a board with the Adafruit I2C LCD shield mounted. You should see a message showing "Syncing..." displayed while the TIC signal is being waited for.
+The current withdrawn power will then appear shortly after.
+
+> **Warning**  
+> If "No signal!" appears after a few seconds, no TIC signal could be decoded from the serial port.
