@@ -25,7 +25,7 @@ public:
      * @param buf A buffer containing new TIC frame bytes
      * @param len The number of bytes stored inside @p buf
      */
-    void onNewFrameBytes(const uint8_t* buf, std::size_t cnt);
+    void onNewFrameBytes(const uint8_t* buf, unsigned int cnt);
     
     /**
      * @brief Method invoked when we reach the end of a TIC frame
@@ -41,7 +41,7 @@ public:
      * @param buf A buffer containing full TIC dataset bytes
      * @param len The number of bytes stored inside @p buf
      */
-    void onDatasetExtracted(const uint8_t* buf, std::size_t cnt);
+    void onDatasetExtracted(const uint8_t* buf, unsigned int cnt);
 
     /* The 3 commodity functions below are used as callbacks to retrieve a TicFrameParser casted as a context */
     /* They are retrieving our instance on TicFrameParser, and invoking the 3 above corresponding methods of TicFrameParser, forwarding their arguments */

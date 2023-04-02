@@ -23,7 +23,7 @@ void TicFrameParser::onNewInstPowerMesurement(uint32_t power) {
  * @param buf A buffer containing new TIC frame bytes
  * @param len The number of bytes stored inside @p buf
  */
-void TicFrameParser::onNewFrameBytes(const uint8_t* buf, std::size_t cnt) {
+void TicFrameParser::onNewFrameBytes(const uint8_t* buf, unsigned int cnt) {
     this->de.pushBytes(buf, cnt);   /* Forward the bytes to the dataset extractor */
 }
 
@@ -45,7 +45,7 @@ void TicFrameParser::onFrameComplete() {
  * @param buf A buffer containing full TIC dataset bytes
  * @param len The number of bytes stored inside @p buf
  */
-void TicFrameParser::onDatasetExtracted(const uint8_t* buf, std::size_t cnt) {
+void TicFrameParser::onDatasetExtracted(const uint8_t* buf, unsigned int cnt) {
     /* This is our actual parsing of a newly received dataset */
     TIC::DatasetView dv(buf, cnt);    /* Decode the TIC dataset using a dataset view object */
     if (dv.isValid()) {
