@@ -179,7 +179,6 @@ void updateDisplay(uint8_t currentTicDecodeState, g_ctx_t& ctx) {
               else
                 lastTicDecode = '*';  /* Overflow */
             }
-            lastDisplayedFrameNo = ctx.tic.nbFramesParsed;
           }
           if (displayedChars > LCD_WIDTH) /* Foolproof */
             displayedChars = LCD_WIDTH;
@@ -201,6 +200,7 @@ void updateDisplay(uint8_t currentTicDecodeState, g_ctx_t& ctx) {
           }
           wdt_reset();
         }
+        lastDisplayedFrameNo = ctx.tic.nbFramesParsed;
         ctx.displayedPower = ctx.tic.lastValidSinsts;
       }
     }
