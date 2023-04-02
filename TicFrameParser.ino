@@ -2,8 +2,9 @@
 
 TicFrameParser::TicFrameParser(g_ctx_t& ctx) :
         ctx(ctx),
-        nbFramesParsed(0),
-        de(ticFrameParserUnWrapDatasetExtractor, this) { }
+        de(ticFrameParserUnWrapDatasetExtractor, this) {
+    this->ctx.tic.nbFramesParsed = 0;
+}
 
 /**
  * @brief Take into account a refreshed instantenous power measurement
@@ -35,8 +36,14 @@ void TicFrameParser::onNewFrameBytes(const uint8_t* buf, unsigned int cnt) {
  */
 void TicFrameParser::onFrameComplete() {
     this->de.reset();
-    //FIXME: Toggle a LED?
-    this->nbFramesParsed++;
+    if (ctx.tic.beat) {
+      digitalWrite(LED_BUILTIN, HIGH);
+    }
+    else {
+      digitalWrite(LED_BUILTIN, LOW);
+    }
+    ctx.tic.beat = !ctx.tic.beat;
+    this->ctx.tic.nbFramesParsed++;
 }
 
 /**

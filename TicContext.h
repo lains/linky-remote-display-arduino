@@ -20,8 +20,9 @@ typedef struct {
   uint32_t      lastValidSinsts;      /*!< Last known value for SINSTS */
   uint32_t      lateTicDecodeCount;   /*!< How many late TIC decode events occurred since startup */
   uint32_t      ticUpdates;           /*!< The total number of TIC updates received from the meter */
-  tic_state_t   lastTicDecodeState;   /*!< The last known TIC decoding state */
   uint32_t      lostTicBytes;         /*!< How many TIC bytes were skipped by decoder */
+  uint32_t      nbFramesParsed;       /*!< Decoded TIC frames counter */
+  tic_state_t   lastTicDecodeState;   /*!< The last known TIC decoding state */
   bool          beat;                 /*!< Heartbeat (toggled between true and false for each received TIC frame) */
 } ctx_tic_t;
 
@@ -29,6 +30,7 @@ typedef struct {
    @brief Context for LCD display data
 */
 typedef struct {
+  
 } ctx_lcd_t;
 
 /**

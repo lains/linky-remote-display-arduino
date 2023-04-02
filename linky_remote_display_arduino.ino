@@ -146,81 +146,13 @@ TIC::Unframer ticUnframer(TicFrameParser::unwrapInvokeOnFrameNewBytes,
                           TicFrameParser::unwrapInvokeOnFrameComplete,
                           (void *)(&ticParser));
 
-#if 0
-/**
-   @brief Process new TIC data received from the meter
-   @param me linked list pointer on the concerned data
-   @param tic The context for TIC data & measurements
-   @param flags Current flags value
-*/
-void processTicIncomingData(ValueList* me, ctx_tic_t& tic, uint8_t flags) {
-  uint32_t sinsts = (uint32_t)(-1);
-  uint8_t charsDrawnAtLine1;
-
-  /* Parse through incoming data */
-  ValueList* datap = me;
-  int count = 0;
-  while (datap != nullptr) {
-    if (strcmp("SINSTS", datap->name) == 0) {
-      sinsts = strtol(datap->value, NULL, 10);
-    }
-    datap = datap->next;
-    count++;
-  }
-
-  /*
-    if (flags & TINFO_FLAGS_ADDED) {
-    lcd.print('+');
-    }
-
-    if (flags & TINFO_FLAGS_UPDATED) {
-    lcd.print('!');
-    }
-  */
-  if (sinsts != (uint32_t)(-1)) { /* We got a proper value for sinsts */
-    tic.lastValidSinsts = sinsts;
-    //lcd.setCursor(15, 0); /* Last character on first line */
-    if (tic.beat) {
-      //lcd.write(ELEC_ICON_IDX);
-      digitalWrite(LED_BUILTIN, HIGH);
-    }
-    else {
-      //lcd.print(' ');
-      digitalWrite(LED_BUILTIN, LOW);
-    }
-    tic.beat = !tic.beat;
-  }
-  /*
-    lcd.setCursor(0, 1);
-    lcd.print(calls);
-    lcd.print('>');
-    lcd.print(count);
-    lcd.print(' ');
-  */
-}
-
-/**
-   @brief Callback function invoked when new of modified data is received
-   @param me linked list pointer on the concerned data
-   @param flags Current flags value
-*/
-void ticNewDataCallback(ValueList* me, uint8_t flags) {
-  ctx.tic.ticUpdates++;
-  if (ctx.stage != STAGE_TIC_IN_SYNC)
-    return;
-
-  wdt_reset();
-  processTicIncomingData(me, ctx.tic, flags);
-  wdt_reset();
-}
-#endif
-
 /**
    @brief Update the values displayed on the LCD screen
    @param currentTicDecodeState The current TIC decoding state
    @param ctx The current context
 */
 void updateDisplay(uint8_t currentTicDecodeState, g_ctx_t& ctx) {
+  static uint32_t lastDisplayedFrameNo = 0;
   if (currentTicDecodeState == TIC_IN_SYNC) {
     if (ctx.stage < STAGE_TIC_IN_SYNC) {
       lcd.clear();  /* Switching to sync then to power display mode */
@@ -231,10 +163,23 @@ void updateDisplay(uint8_t currentTicDecodeState, g_ctx_t& ctx) {
         if (ctx.displayedPower != ctx.tic.lastValidSinsts) {
           char lastTicDecode = ' ';
           uint8_t displayedChars = uint32ToNbDigits(ctx.tic.lastValidSinsts) + 1; /* +1 for the W symbol */
+          /*
           if (ctx.tic.lateTicDecodeCount>0) {
             if (ctx.tic.lateTicDecodeCount>26)
               ctx.tic.lateTicDecodeCount = 0;
             lastTicDecode = 'a' + ctx.tic.lateTicDecodeCount;
+          }*/
+          if (lastDisplayedFrameNo != ctx.tic.nbFramesParsed) {
+            uint8_t skipped = (uint8_t)(ctx.tic.nbFramesParsed - lastDisplayedFrameNo);
+            if (skipped > 1) { /* 1 is normal, we are displaying the next frame */
+              skipped--; /* Count the number of skipped frames */
+              skipped--; /* 1 skipped corresponds to a */
+              if (skipped<26)
+                lastTicDecode = 'a' + skipped;
+              else
+                lastTicDecode = '*';  /* Overflow */
+            }
+            lastDisplayedFrameNo = ctx.tic.nbFramesParsed;
           }
           if (displayedChars > LCD_WIDTH) /* Foolproof */
             displayedChars = LCD_WIDTH;

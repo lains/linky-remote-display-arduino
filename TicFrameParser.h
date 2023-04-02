@@ -90,6 +90,5 @@ public:
 
 /* Attributes */
     g_ctx_t& ctx; /*!< The global TIC context */
-    unsigned int nbFramesParsed; /*!< Total number of complete frames parsed */
     TIC::DatasetExtractor de;   /*!< The encapsulated dataset extractor instance (programmed to call us back on newly decoded datasets) */
 };
