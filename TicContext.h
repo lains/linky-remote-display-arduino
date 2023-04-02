@@ -22,24 +22,25 @@ typedef struct {
   uint32_t      ticUpdates;           /*!< The total number of TIC updates received from the meter */
   uint32_t      lostTicBytes;         /*!< How many TIC bytes were skipped by decoder */
   uint32_t      nbFramesParsed;       /*!< Decoded TIC frames counter */
-  tic_state_t   lastTicDecodeState;   /*!< The last known TIC decoding state */
   bool          beat;                 /*!< Heartbeat (toggled between true and false for each received TIC frame) */
+  tic_state_t   lastTicDecodeState;   /*!< The last known TIC decoding state */
 } ctx_tic_t;
 
 /**
    @brief Context for LCD display data
 */
-typedef struct {
-  
+typedef struct { /*FIXME: new, implement algo fully using this data */
+  uint32_t      displayedPower;       /*!< Currently displayed power value */
+  uint8_t       nbCharsOnLine0;         /*!< Number of characters displayed at the left of the first line on the display (used to efficiently clear data) */
+  char          charsOnLine0[16+1];   /*!< List of characters displayed on the first LCD line+'\0' to terminate the string if the line is full */
 } ctx_lcd_t;
 
 /**
    @brief Global context
 */
 typedef struct {
-  ctx_tic_t     tic;                  /*!< TIC & measurements-related context values */
-  ctx_boot_t    boot;                 /*!< Boot-related context values */
-  uint32_t      displayedPower;       /*!< Currently displayed power value */
   uint8_t       stage;                /*!< The current stage in the startup state machine */
-  uint8_t       charsOnLine0;         /*!< Number of characters displayed at the left of the first line on the display (used to efficiently clear data) */
+  ctx_tic_t     tic;                  /*!< TIC & measurements-related context values */
+  ctx_lcd_t     lcd;                  /*!< LCD display-related context values */
+  ctx_boot_t    boot;                 /*!< Boot-related context values */
 } g_ctx_t;

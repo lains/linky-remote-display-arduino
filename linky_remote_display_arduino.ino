@@ -68,9 +68,9 @@ void setup() {
   ctx.tic.lateTicDecodeCount = 0;
   ctx.tic.ticUpdates = 0;
   ctx.tic.lastValidSinsts = -1;
-  ctx.displayedPower = -1;
+  ctx.lcd.displayedPower = -1;
   ctx.tic.lastTicDecodeState = TIC_NO_SYNC;
-  ctx.charsOnLine0 = LCD_WIDTH; /* LCD display assumed to be full of characters to clear */
+  ctx.lcd.nbCharsOnLine0 = LCD_WIDTH; /* LCD display assumed to be full of characters to clear */
   ctx.tic.beat = false;
   pinMode(LED_BUILTIN, OUTPUT);
   lcd.begin(LCD_WIDTH, LCD_HEIGHT); /* Initialize the LCD display: 16x2 */
@@ -148,61 +148,58 @@ TIC::Unframer ticUnframer(TicFrameParser::unwrapInvokeOnFrameNewBytes,
 
 /**
    @brief Update the values displayed on the LCD screen
-   @param currentTicDecodeState The current TIC decoding state
    @param ctx The current context
 */
-void updateDisplay(uint8_t currentTicDecodeState, g_ctx_t& ctx) {
+void updateDisplay(g_ctx_t& ctx) {
   static uint32_t lastDisplayedFrameNo = 0;
-  if (currentTicDecodeState == TIC_IN_SYNC) {
-    if (ctx.stage < STAGE_TIC_IN_SYNC) {
-      lcd.clear();  /* Switching to sync then to power display mode */
-      ctx.stage = STAGE_TIC_IN_SYNC;
-    }
-    else if (ctx.stage == STAGE_TIC_IN_SYNC) {  /* Display only if STAGE_TIC_IN_SYNC, not even when STAGE_TIC_IN_SYNC_RUNNING_LATE, as we don't have enought time to  */
-      if (ctx.tic.lastValidSinsts != -1) {
-        if (ctx.displayedPower != ctx.tic.lastValidSinsts) {
-          char lastTicDecode = ' ';
-          uint8_t displayedChars = uint32ToNbDigits(ctx.tic.lastValidSinsts) + 1; /* +1 for the W symbol */
-          /*
-          if (ctx.tic.lateTicDecodeCount>0) {
-            if (ctx.tic.lateTicDecodeCount>26)
-              ctx.tic.lateTicDecodeCount = 0;
-            lastTicDecode = 'a' + ctx.tic.lateTicDecodeCount;
-          }*/
-          if (lastDisplayedFrameNo != ctx.tic.nbFramesParsed) {
-            uint8_t skipped = (uint8_t)(ctx.tic.nbFramesParsed - lastDisplayedFrameNo);
-            if (skipped > 1) { /* 1 is normal, we are displaying the next frame */
-              skipped--; /* Count the number of skipped frames */
-              skipped--; /* 1 skipped corresponds to a */
-              if (skipped<26)
-                lastTicDecode = 'a' + skipped;
-              else
-                lastTicDecode = '*';  /* Overflow */
-            }
+  if (ctx.stage < STAGE_TIC_IN_SYNC) {
+    lcd.clear();  /* Switching to sync then to power display mode */
+    ctx.stage = STAGE_TIC_IN_SYNC;
+  }
+  else if (ctx.stage == STAGE_TIC_IN_SYNC) {  /* Display only if STAGE_TIC_IN_SYNC, not even when STAGE_TIC_IN_SYNC_RUNNING_LATE, as we don't have enought time to  */
+    if (ctx.tic.lastValidSinsts != -1) {
+      if (ctx.lcd.displayedPower != ctx.tic.lastValidSinsts) {
+        char lastTicDecode = ' ';
+        uint8_t displayedChars = uint32ToNbDigits(ctx.tic.lastValidSinsts) + 1; /* +1 for the W symbol */
+        /*
+        if (ctx.tic.lateTicDecodeCount>0) {
+          if (ctx.tic.lateTicDecodeCount>26)
+            ctx.tic.lateTicDecodeCount = 0;
+          lastTicDecode = 'a' + ctx.tic.lateTicDecodeCount;
+        }*/
+        if (lastDisplayedFrameNo != ctx.tic.nbFramesParsed) {
+          uint8_t skipped = (uint8_t)(ctx.tic.nbFramesParsed - lastDisplayedFrameNo);
+          if (skipped > 1) { /* 1 is normal, we are displaying the next frame */
+            skipped--; /* Count the number of skipped frames */
+            skipped--; /* 1 skipped corresponds to a */
+            if (skipped<26)
+              lastTicDecode = 'a' + skipped;
+            else
+              lastTicDecode = '*';  /* Overflow */
           }
-          if (displayedChars > LCD_WIDTH) /* Foolproof */
-            displayedChars = LCD_WIDTH;
-          lcd.setCursor(0, 0);
-          lcd.print(ctx.tic.lastValidSinsts);
-          lcd.print('W');
-          if (lastTicDecode != ' ') {
-            lcd.print(lastTicDecode); /* Dump the late TIC decode count letter right after character 'W' */
-            displayedChars++;
-          }
-          if (ctx.charsOnLine0 < displayedChars) {
-            ctx.charsOnLine0 = displayedChars;
-          }
-          else {
-            while (ctx.charsOnLine0 > displayedChars) {  /* We have previous chars to clean up */
-              lcd.print(' ');
-              ctx.charsOnLine0--;
-            }
-          }
-          wdt_reset();
         }
-        lastDisplayedFrameNo = ctx.tic.nbFramesParsed;
-        ctx.displayedPower = ctx.tic.lastValidSinsts;
+        if (displayedChars > LCD_WIDTH) /* Foolproof */
+          displayedChars = LCD_WIDTH;
+        lcd.setCursor(0, 0);
+        lcd.print(ctx.tic.lastValidSinsts);
+        lcd.print('W');
+        if (lastTicDecode != ' ') {
+          lcd.print(lastTicDecode); /* Dump the late TIC decode count letter right after character 'W' */
+          displayedChars++;
+        }
+        if (ctx.lcd.nbCharsOnLine0 < displayedChars) {
+          ctx.lcd.nbCharsOnLine0 = displayedChars;
+        }
+        else {
+          while (ctx.lcd.nbCharsOnLine0 > displayedChars) {  /* We have previous chars to clean up */
+            lcd.print(' ');
+            ctx.lcd.nbCharsOnLine0--;
+          }
+        }
+        wdt_reset();
       }
+      lastDisplayedFrameNo = ctx.tic.nbFramesParsed;
+      ctx.lcd.displayedPower = ctx.tic.lastValidSinsts;
     }
   }
 }
@@ -264,7 +261,8 @@ void loop() {
       tic_state_t newTicDecodeState = (ticUnframer.isInSync()?TIC_IN_SYNC:TIC_NO_SYNC);
 
       wdt_reset();
-      updateDisplay(newTicDecodeState, ctx);
+      if (newTicDecodeState == TIC_IN_SYNC)
+        updateDisplay(ctx);
       ctx.tic.lastTicDecodeState = newTicDecodeState;
     }
     else {  /* No waiting RX byte... we processed every TIC byte, we are running early */
