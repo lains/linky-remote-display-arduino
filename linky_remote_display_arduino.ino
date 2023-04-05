@@ -8,6 +8,7 @@
 #include "TIC/DatasetView.h"
 #include "TicFrameParser.h"
 #include "TicContext.h"
+#include <stdint.h> // For INT32_MIN
 
 Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 
@@ -40,7 +41,21 @@ constexpr uint16_t TIC_PROBE_FAIL_TIMEOUT_MS = 10000; /*!< How long (in ms) shou
 #define LCD_WIDTH 16
 #define LCD_HEIGHT 2
 
-#define uint32ToNbDigits(i) (i<10?1:(i<100?2:(i<1000?3:(i<10000?4:5))))
+static uint8_t uint32ToNbDigits(uint32_t value) {
+  uint8_t result = 0;
+  result += (value/1000000000 != 0)?1:0;
+  result += (value/100000000 != 0)?1:0;
+  result += (value/10000000 != 0)?1:0;
+  result += (value/1000000 != 0)?1:0;
+  result += (value/100000 != 0)?1:0;
+  result += (value/10000 != 0)?1:0;
+  result += (value/1000 != 0)?1:0;
+  result += (value/100 != 0)?1:0;
+  result += (value/10 != 0)?1:0;
+  result++; /* Even 0 will be represented as one digit, so the unit value does not matter */
+  return result;
+}
+#define uint32ToNbDigits(i) (i<10?1:(i<100?2:(i<1000?3:(i<10000?4:(i<100000?5:(i<1000000?6:7))))))
 /**
    Boot progress and TIC decoding state machine
 */
@@ -67,8 +82,8 @@ void setup() {
   ctx.boot.nbDotsProgress = 0;
   ctx.tic.lateTicDecodeCount = 0;
   ctx.tic.ticUpdates = 0;
-  ctx.tic.lastValidSinsts = -1;
-  ctx.lcd.displayedPower = -1;
+  ctx.tic.lastValidWithdrawnPower = INT32_MIN;
+  ctx.lcd.displayedPower = INT32_MIN;
   ctx.tic.lastTicDecodeState = TIC_NO_SYNC;
   ctx.lcd.nbCharsOnLine0 = LCD_WIDTH; /* LCD display assumed to be full of characters to clear */
   ctx.tic.beat = false;
@@ -157,16 +172,15 @@ void updateDisplay(g_ctx_t& ctx) {
     ctx.stage = STAGE_TIC_IN_SYNC;
   }
   else if (ctx.stage == STAGE_TIC_IN_SYNC) {  /* Display only if STAGE_TIC_IN_SYNC, not even when STAGE_TIC_IN_SYNC_RUNNING_LATE, as we don't have enought time to  */
-    if (ctx.tic.lastValidSinsts != -1) {
-      if (ctx.lcd.displayedPower != ctx.tic.lastValidSinsts) {
-        char lastTicDecode = ' ';
-        uint8_t displayedChars = uint32ToNbDigits(ctx.tic.lastValidSinsts) + 1; /* +1 for the W symbol */
+    if (ctx.tic.lastValidWithdrawnPower != INT32_MIN) {
+      if (ctx.lcd.displayedPower != ctx.tic.lastValidWithdrawnPower) {
         /*
         if (ctx.tic.lateTicDecodeCount>0) {
           if (ctx.tic.lateTicDecodeCount>26)
             ctx.tic.lateTicDecodeCount = 0;
           lastTicDecode = 'a' + ctx.tic.lateTicDecodeCount;
         }*/
+        char lastTicDecode = ' ';
         if (lastDisplayedFrameNo != ctx.tic.nbFramesParsed) {
           uint8_t skipped = (uint8_t)(ctx.tic.nbFramesParsed - lastDisplayedFrameNo);
           if (skipped > 1) { /* 1 is normal, we are displaying the next frame */
@@ -178,15 +192,32 @@ void updateDisplay(g_ctx_t& ctx) {
               lastTicDecode = '*';  /* Overflow */
           }
         }
-        if (displayedChars > LCD_WIDTH) /* Foolproof */
-          displayedChars = LCD_WIDTH;
         lcd.setCursor(0, 0);
-        lcd.print(ctx.tic.lastValidSinsts);
+        uint32_t absLastValidWithdrawnPower;
+        uint8_t displayedChars = 0;
+        if (ctx.tic.lastValidWithdrawnPower < 0) {
+          lcd.print('~');
+          displayedChars++; /* For the '~' character */
+          lcd.print('-');
+          displayedChars++; /* For the leading '-' sign */
+          absLastValidWithdrawnPower = -ctx.tic.lastValidWithdrawnPower;
+        }
+        else {
+          absLastValidWithdrawnPower = ctx.tic.lastValidWithdrawnPower;
+        }
+        lcd.print(absLastValidWithdrawnPower);
+        displayedChars += uint32ToNbDigits(absLastValidWithdrawnPower);
+        
         lcd.print('W');
+        displayedChars++;
+        
         if (lastTicDecode != ' ') {
           lcd.print(lastTicDecode); /* Dump the late TIC decode count letter right after character 'W' */
           displayedChars++;
         }
+        if (displayedChars > LCD_WIDTH) /* Foolproof */
+          displayedChars = LCD_WIDTH;
+        
         if (ctx.lcd.nbCharsOnLine0 < displayedChars) {
           ctx.lcd.nbCharsOnLine0 = displayedChars;
         }
@@ -199,7 +230,7 @@ void updateDisplay(g_ctx_t& ctx) {
         wdt_reset();
       }
       lastDisplayedFrameNo = ctx.tic.nbFramesParsed;
-      ctx.lcd.displayedPower = ctx.tic.lastValidSinsts;
+      ctx.lcd.displayedPower = ctx.tic.lastValidWithdrawnPower;
     }
   }
 }

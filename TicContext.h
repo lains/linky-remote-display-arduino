@@ -17,7 +17,7 @@ typedef enum {
    @brief Context for TIC data & measurements
 */
 typedef struct {
-  uint32_t      lastValidSinsts;      /*!< Last known value for SINSTS */
+  int32_t       lastValidWithdrawnPower;      /*!< Last known withdrawn power (if negative, we are actually injecting power), or INT32_MIN if unknown */
   uint32_t      lateTicDecodeCount;   /*!< How many late TIC decode events occurred since startup */
   uint32_t      ticUpdates;           /*!< The total number of TIC updates received from the meter */
   uint32_t      lostTicBytes;         /*!< How many TIC bytes were skipped by decoder */
@@ -30,8 +30,8 @@ typedef struct {
    @brief Context for LCD display data
 */
 typedef struct { /*FIXME: new, implement algo fully using this data */
-  uint32_t      displayedPower;       /*!< Currently displayed power value */
-  uint8_t       nbCharsOnLine0;         /*!< Number of characters displayed at the left of the first line on the display (used to efficiently clear data) */
+  int32_t       displayedPower;       /*!< Currently displayed power value */
+  uint8_t       nbCharsOnLine0;       /*!< Number of characters displayed at the left of the first line on the display (used to efficiently clear data) */
   char          charsOnLine0[16+1];   /*!< List of characters displayed on the first LCD line+'\0' to terminate the string if the line is full */
 } ctx_lcd_t;
 

@@ -14,8 +14,30 @@ public:
      * 
      * @param power The instantaneous power (in Watts)
      */
-    void onNewInstPowerMesurement(uint32_t power);
+    void onNewWithdrawnPowerMesurement(uint32_t power);
 
+    /**
+     * @brief Take into account a refreshed instantenous voltage measurement
+     * 
+     * @param voltage The instantaneous mains voltage (in Volts)
+     */
+    void onNewInstVoltageMeasurement(uint32_t voltage);
+
+    /**
+     * @brief Take into account a refreshed instantenous current measurement
+     * 
+     * @param voltage The instantaneous mains absolute current (in Amperes), the sign is not provided so this current can be widthdrawn or injected
+     */
+    void onNewInstCurrentMeasurement(uint32_t current);
+
+    /**
+     * @brief Try to compute the current withdrawn or injected power as soon as we have collected enough values (power, abs current, rms voltage)
+     * 
+     * @param source The measurement type to take into account
+     * @param value The instantaneous value corresponding to @p source
+     */
+    void mayComputePower(unsigned int source, unsigned int value);
+    
     /* The 3 methods below are invoked as callbacks by TIC::Unframer and TIC::DatasetExtractor durig the TIC decoding process */
     /**
      * @brief Method invoked on new bytes received inside a TIC frame
