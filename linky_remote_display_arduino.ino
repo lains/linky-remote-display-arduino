@@ -41,6 +41,19 @@ constexpr uint16_t TIC_PROBE_FAIL_TIMEOUT_MS = 10000; /*!< How long (in ms) shou
 #define LCD_WIDTH 16
 #define LCD_HEIGHT 2
 
+/* Optimized version taken from https://lemire.me/blog/2021/05/28/computing-the-number-of-digits-of-an-integer-quickly/ */
+#if 0
+static int int_log2(uint32_t x) { return 31 - __builtin_clz(x|1); }
+
+static uint8_t uint32ToNbDigits(uint32_t value) {
+    static uint32_t table[] = {9, 99, 999, 9999, 99999, 999999, 9999999, 99999999, 999999999};
+    int y = (9 * int_log2(x)) >> 5;
+    y += x > table[y];
+    return y + 1;
+
+}
+#endif
+
 static uint8_t uint32ToNbDigits(uint32_t value) {
   uint8_t result = 0;
   result += (value/1000000000 != 0)?1:0;
