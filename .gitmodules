@@ -1,3 +1,3 @@
-[submodule "stm32-linky-display"]
-	path = stm32-linky-display
-	url = https://github.com/lains/stm32-linky-display.git
+[submodule "ticdecodecpp"]
+	path = ticdecodecpp
+	url = https://github.com/lains/ticdecodecpp.git

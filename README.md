@@ -25,7 +25,7 @@ You will also have to import the following external library that this code depen
 To compile, first clone the content of this repository and the TIC library submodule:
 ```
 git clone https://github.com/lains/linky_remote_display_arduino.git
-git submodule init stm32-linky-display
+git submodule init ticdecodecpp
 ```
 
 Once these prerequisites are satisfied, compile with the Arduino IDE.
