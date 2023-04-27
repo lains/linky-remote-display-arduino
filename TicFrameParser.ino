@@ -58,7 +58,11 @@ void TicFrameParser::mayComputePower(unsigned int source, unsigned int value) {
         knownRmsVoltage != -1 &&
         knownAbsCurrent != -1) {
         /* We are able to estimate the injected power */
-        int32_t currentPower = -((int32_t)knownRmsVoltage * (int32_t)knownAbsCurrent); /* Leads to a ngative number because we are injecting */
+        int32_t currentPower = knownRmsVoltage * knownAbsCurrent; /* Get an approximate value for power */
+        if (knownRmsVoltage>100) { /* Because current is rounded to 1A, measurement will be done with an error of +/-50W */
+            currentPower = (currentPower+25) / 50 * 50; /* Round to the nearest value in steps of 50W */
+        }
+        currentPower = -currentPower; /* Turn power value to negative because we are injecting */
         powerKnownForCurrentFrame = true;
         if (currentPower <= INT32_MIN)
             this->ctx.tic.lastValidWithdrawnPower = INT32_MIN+1;
